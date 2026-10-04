@@ -1,18 +1,24 @@
 {
-  "name": "parsity_rtk_weather",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
-  },
-  "dependencies": {
-    "eslint": "8.50.0",
-    "eslint-config-next": "13.5.3",
-    "next": "13.5.3",
-    "react": "18.2.0",
-    "react-dom": "18.2.0"
-  }
+    "name": "parsity_rtk_weather",
+    "private": true,
+    "scripts": {
+        "dev": "next dev",
+        "build": "next build",
+        "start": "next start",
+        "lint": "eslint ."
+    },
+    "dependencies": {
+        "@microcharts/react": "^0.19.1",
+        "@reduxjs/toolkit": "^2.12.0",
+        "eslint": "10.12.0",
+        "eslint-config-next": "16.3.8",
+        "next": "16.3.8",
+        "react": "19.3.0",
+        "react-dom": "19.3.0",
+        "react-redux": "^9.3.0"
+    },
+    "devDependencies": {
+        "@types/node": "26.6.4",
+        "@types/react": "19.3.0"
+    }
 }
