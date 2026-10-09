@@ -1,18 +1,27 @@
 'use client';
 
-import {useState, type ChangeEvent, type SubmitEvent} from 'react';
-import {Sparkline} from '@microcharts/react/sparkline/interactive';
+import {useState, useRef, type ChangeEvent, type SubmitEvent} from 'react';
 import {useSelector, useDispatch} from 'react-redux';
-import {addCity} from '../store/weatherSlice';
-import {type RootState} from '../store/store';
+import {Field, Label, Combobox, ComboboxInput, ComboboxOptions, ComboboxOption} from '@headlessui/react';
+import {Sparkline} from '@microcharts/react/sparkline/interactive';
+import {fetchData} from '../api';
+import {fetchWeather} from '../store/weatherSlice';
+import {type AppDispatch, type RootState} from '../store/store';
 import '@microcharts/react/motion';
 
-type CitySuggestion = {
+type Location = {
     name: string;
-    latitude: number;
-    longitude: number;
     admin1?: string;
     country: string;
+};
+
+type CitySuggestion = Location & {
+    latitude: number;
+    longitude: number;
+};
+
+type GeocodingResponse = {
+    results?: CitySuggestion[];
 };
 
 const sparklineProps = {
@@ -25,103 +34,124 @@ const sparklineProps = {
 };
 
 export default function Home() {
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState('');
+    const [query, setQuery] = useState('');
+    const [searchError, setSearchError] = useState(false);
     const [suggestions, setSuggestions] = useState<CitySuggestion[]>([]);
-    const [city, setCity] = useState('');
-    const cities = useSelector((state: RootState) => state.weather.cities);
-    const dispatch = useDispatch();
+    const [selectedCity, setSelectedCity] = useState<CitySuggestion | null>(null);
+    const {isLoading, cities, error} = useSelector((state: RootState) => state.weather);
+    const dispatch = useDispatch<AppDispatch>();
+    const inputRef = useRef<HTMLInputElement>(null);
 
-    async function fetchData(url: string) {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-        return response.json();
+    function formatCity(city: Location) {
+        return `${city.name}, ${city.admin1 ? `${city.admin1}, ` : ''}${city.country}`;
     }
 
     async function handleChange(event: ChangeEvent<HTMLInputElement>) {
         const {value} = event.target;
-        setCity(value);
+        setQuery(value);
+        setSearchError(false);
+        setSelectedCity(null);
         if (value.trim().length < 2) return setSuggestions([]);
+        // AbortController
         try {
-            const cityData = await fetchData(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(value.trim())}&count=5`);
-            setSuggestions(cityData.results ?? []);
+            const cityData = await fetchData<GeocodingResponse>(
+                `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(value.trim())}`,
+            );
+            const filteredSuggestions = (cityData.results ?? [])
+                .filter(suggestion => !cities.some(city => city.latitude === suggestion.latitude && city.longitude === suggestion.longitude))
+                .slice(0, 5);
+            setSuggestions(filteredSuggestions);
         } catch (error) {
             console.error(error);
+            setSearchError(true);
             setSuggestions([]);
         }
     }
 
     async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault();
-        setIsLoading(true);
-        setError('');
+        if (!selectedCity) return;
         try {
-            const cityData = await fetchData(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city.trim())}&count=5`);
-            if (!cityData.results) return setError('City not found.');
-            const {name, latitude, longitude} = cityData.results[0];
-            const isDuplicate = cities.some(city => city.name.toLowerCase() === name.toLowerCase());
-            if (isDuplicate) return setError('City already added.');
-            const weatherData = await fetchData(
-                `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&hourly=temperature_2m,pressure_msl,relative_humidity_2m&forecast_hours=168&timezone=auto`,
-            );
-            const {temperature_2m: temperature, relative_humidity_2m: humidity, pressure_msl: pressure} = weatherData.hourly;
-            dispatch(addCity({name, latitude, longitude, temperature, humidity, pressure}));
-            setCity('');
-            // console.log(cityData);
+            await dispatch(fetchWeather(selectedCity)).unwrap();
+            setQuery('');
+            setSelectedCity(null);
+            setSuggestions([]);
+            // clear the ComboboxInput's DOM value
+            if (inputRef.current) inputRef.current.value = '';
         } catch (error) {
             console.error(error);
-            setError('Something went wrong. Please try again later.');
-        } finally {
-            setIsLoading(false);
         }
     }
 
     return (
         <main>
+            <h1>Weather</h1>
             <search>
-                <form onSubmit={handleSubmit}>
-                    <label htmlFor="city">Search City</label>
-                    <input
-                        id="city"
-                        type="search"
-                        value={city}
-                        onChange={handleChange}
-                        placeholder="Toronto"
-                        autoComplete="off"
-                        list="suggestions"
-                        required
-                    />
-                    <datalist id="suggestions">
-                        {suggestions.map(suggestion => (
-                            <option
-                                key={`${suggestion.latitude}-${suggestion.longitude}`}
-                                value={`${suggestion.name}, ${suggestion.admin1 ? `${suggestion.admin1}, ` : ''}${suggestion.country}`}
+                <form
+                    onSubmit={handleSubmit}
+                    autoComplete="off"
+                >
+                    <Field>
+                        <Label>Search City</Label>
+                        <Combobox
+                            value={selectedCity}
+                            onChange={city => setSelectedCity(city)}
+                            // onClose={() => setQuery('')}
+                        >
+                            <ComboboxInput
+                                type="search"
+                                placeholder="Toronto, Ontario, Canada"
+                                aria-describedby="search-help"
+                                ref={inputRef}
+                                onChange={handleChange}
+                                displayValue={(city: CitySuggestion | null) => (city ? formatCity(city) : query)}
+                                onKeyDown={event => {
+                                    if (event.key === 'Escape') setQuery('');
+                                }}
                             />
-                        ))}
-                    </datalist>
-                    <button disabled={isLoading || !city.trim()}>{isLoading ? 'Searching...' : 'Search'}</button>
+                            <ComboboxOptions
+                                anchor="bottom"
+                                // static
+                            >
+                                {suggestions.map(suggestion => (
+                                    <ComboboxOption
+                                        key={`${suggestion.latitude}-${suggestion.longitude}`}
+                                        value={suggestion}
+                                    >
+                                        {formatCity(suggestion)}
+                                    </ComboboxOption>
+                                ))}
+                            </ComboboxOptions>
+                        </Combobox>
+                    </Field>
+                    <button disabled={isLoading || !selectedCity}>{isLoading ? 'Searching...' : 'Search'}</button>
                 </form>
+                <p id="search-help">Select a city from the suggestions to search.</p>
             </search>
+            {searchError && <p role="alert">Unable to search for cities. Please try again.</p>}
             {error && <p role="alert">{error}</p>}
-            <section aria-label="weather forecast charts">
+            <section aria-label="weather forecasts">
                 {cities.map(city => (
-                    <div key={city.name}>
-                        <h2>{city.name}</h2>
+                    <div key={`${city.latitude}-${city.longitude}`}>
+                        <h2>{formatCity(city)}</h2>
                         <Sparkline
                             {...sparklineProps}
                             data={city.temperature}
                             format={value => `${value}°C`}
                         />
+                        <p>Temperature</p>
                         <Sparkline
                             {...sparklineProps}
                             data={city.humidity}
                             format={value => `${value}%`}
                         />
+                        <p>Humidity</p>
                         <Sparkline
                             {...sparklineProps}
-                            data={city.pressure}
-                            format={value => `${value} hPa`}
+                            data={city.precipitation}
+                            format={value => `${value}mm`}
                         />
+                        <p>Precipitation</p>
                     </div>
                 ))}
             </section>
