@@ -88,13 +88,13 @@ export default function Search({cities}: SearchProps) {
     }, []);
 
     return (
-        <search>
+        <search className="max-w-xl mx-auto mbe-2">
             <form
                 onSubmit={handleSubmit}
                 autoComplete="off"
             >
                 <Field>
-                    <Label>Search City</Label>
+                    <Label className="block font-medium text-gray-500 dark:text-gray-400">Search City</Label>
                     <Combobox
                         value={selectedCity}
                         onChange={city => setSelectedCity(city)}
@@ -103,21 +103,24 @@ export default function Search({cities}: SearchProps) {
                             type="search"
                             placeholder="Toronto, Ontario, Canada"
                             aria-describedby="search-help"
+                            maxLength={100}
                             ref={inputRef}
                             onChange={handleChange}
                             displayValue={(city: CitySuggestion | null) => (city ? formatCity(city) : query)}
                             onKeyDown={event => {
                                 if (event.key === 'Escape') setQuery('');
                             }}
+                            className="w-full rounded-md shadow-sm border border-gray-300 dark:border-gray-700 dark:bg-gray-800 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-200 placeholder:text-gray-400 dark:placeholder:text-gray-500 px-4 py-2 mbs-1 mbe-2.5"
                         />
                         <ComboboxOptions
                             anchor="bottom"
-                            // static
+                            className="w-(--input-width) [--anchor-gap:8px] rounded-md border border-gray-300 dark:border-gray-700 bg-[Canvas] dark:bg-gray-800 shadow-lg empty:invisible px-2 py-1"
                         >
                             {suggestions.map(suggestion => (
                                 <ComboboxOption
                                     key={`${suggestion.latitude}-${suggestion.longitude}`}
                                     value={suggestion}
+                                    className="text-sm rounded-md data-focus:bg-blue-50 dark:data-focus:bg-gray-700 data-focus:text-blue-700 dark:data-focus:text-blue-300 data-selected:text-gray-500 dark:data-selected:text-gray-400 cursor-pointer px-2 py-2"
                                 >
                                     {formatCity(suggestion)}
                                 </ComboboxOption>
@@ -125,10 +128,27 @@ export default function Search({cities}: SearchProps) {
                         </ComboboxOptions>
                     </Combobox>
                 </Field>
-                <button disabled={isLoading || !selectedCity}>{isLoading ? 'Searching...' : 'Search'}</button>
+                <button
+                    disabled={isLoading || !selectedCity}
+                    className="w-full font-medium rounded-md bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-amber-50 disabled:text-gray-500 dark:disabled:text-gray-400 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[Canvas] focus-visible:ring-blue-500 cursor-pointer disabled:cursor-not-allowed transition-colors duration-300 px-4 py-2"
+                >
+                    {isLoading ? 'Searching...' : 'Search'}
+                </button>
             </form>
-            <p id="search-help">Select a city from the suggestions to search.</p>
-            {searchError && <p role="alert">Unable to search for cities. Please try again.</p>}
+            <p
+                id="search-help"
+                className="font-medium text-sm text-center text-gray-500 mbs-2"
+            >
+                Select a city from the suggestions to search.
+            </p>
+            {searchError && (
+                <p
+                    role="alert"
+                    className="text-lg font-medium text-center text-red-500 mbs-2"
+                >
+                    Unable to search for cities. Please try again.
+                </p>
+            )}
         </search>
     );
 }
