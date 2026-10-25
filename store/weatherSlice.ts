@@ -1,22 +1,32 @@
 import {createSlice, createAsyncThunk, type PayloadAction} from '@reduxjs/toolkit';
-import {fetchData} from '../utils';
+import {formatCity, fetchData} from '../utils';
 
-type FetchWeatherArgs = {
+type CityLocation = {
     name: string;
     admin1?: string;
     country: string;
+};
+
+type CityCoordinates = {
     latitude: number;
     longitude: number;
 };
 
-export type WeatherCity = FetchWeatherArgs & {
+type CityData = CityLocation & CityCoordinates;
+
+type FetchWeatherRequest = CityData & {
+    source: 'storage' | 'search';
+};
+
+type WeatherCity = CityData & {
     temperature: number[];
-    humidity: number[];
+    windSpeed: number[];
     precipitation: number[];
 };
 
 type WeatherState = {
     isLoading: boolean;
+    isInitialized: boolean;
     cities: WeatherCity[];
     error: string | null;
 };
@@ -24,55 +34,67 @@ type WeatherState = {
 type WeatherResponse = {
     hourly: {
         temperature_2m: number[];
-        relative_humidity_2m: number[];
+        wind_speed_10m: number[];
         precipitation: number[];
     };
 };
 
 const initialState: WeatherState = {
     isLoading: false,
+    isInitialized: false,
     cities: [],
     error: null,
 };
 
-export const fetchWeather = createAsyncThunk('weather/fetchWeather', async (city: FetchWeatherArgs) => {
+export const fetchWeather = createAsyncThunk('weather/fetchWeather', async (city: FetchWeatherRequest) => {
+    const {name, admin1, country, latitude, longitude} = city;
     const signal = AbortSignal.timeout(5_000);
     const weatherData = await fetchData<WeatherResponse>(
-        `https://api.open-meteo.com/v1/forecast?latitude=${city.latitude}&longitude=${city.longitude}&hourly=temperature_2m,relative_humidity_2m,precipitation&forecast_hours=168&timezone=auto`,
+        `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&hourly=temperature_2m,wind_speed_10m,precipitation&forecast_hours=168&timezone=auto`,
         signal,
     );
-    const {temperature_2m: temperature, relative_humidity_2m: humidity, precipitation} = weatherData.hourly;
-    return {...city, temperature, humidity, precipitation};
+    const {temperature_2m: temperature, wind_speed_10m: windSpeed, precipitation} = weatherData.hourly;
+    return {name, admin1, country, latitude, longitude, temperature, windSpeed, precipitation};
 });
 
 const weatherSlice = createSlice({
     name: 'weather',
     initialState,
     reducers: {
-        removeCity: (state, action: PayloadAction<{latitude: number; longitude: number}>) => {
+        setInitialized: state => {
+            state.isInitialized = true;
+        },
+        removeCity: (state, action: PayloadAction<CityCoordinates>) => {
             state.cities = state.cities.filter(city => city.latitude !== action.payload.latitude || city.longitude !== action.payload.longitude);
         },
     },
     extraReducers: builder => {
-        builder.addCase(fetchWeather.pending, state => {
-            state.isLoading = true;
-            state.error = null;
+        builder.addCase(fetchWeather.pending, (state, action) => {
+            if (action.meta.arg.source === 'search') {
+                state.isLoading = true;
+                state.error = null;
+            }
         });
         builder.addCase(fetchWeather.fulfilled, (state, action) => {
-            state.isLoading = false;
+            if (action.meta.arg.source === 'search') {
+                state.isLoading = false;
+            }
             const isDuplicate = state.cities.some(city => city.latitude === action.payload.latitude && city.longitude === action.payload.longitude);
             if (isDuplicate) {
-                state.error = `${action.payload.name}, ${action.payload.country} is already in your forecasts.`;
+                if (action.meta.arg.source === 'search') state.error = `${formatCity(action.payload)} is already in your forecasts.`;
                 return;
             }
             state.cities.unshift(action.payload);
         });
-        builder.addCase(fetchWeather.rejected, state => {
-            state.isLoading = false;
-            state.error = 'Unable to load weather data. Please try again.';
+        builder.addCase(fetchWeather.rejected, (state, action) => {
+            if (action.meta.arg.source === 'search') {
+                state.isLoading = false;
+                state.error = 'Unable to load weather data. Please try again.';
+            }
         });
     },
 });
 
-export const {removeCity} = weatherSlice.actions;
+export type {CityLocation, CityData, WeatherCity};
+export const {setInitialized, removeCity} = weatherSlice.actions;
 export default weatherSlice.reducer;

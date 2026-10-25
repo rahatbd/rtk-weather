@@ -1,17 +1,12 @@
 import {useState, useEffect, useRef, type ChangeEvent, type SubmitEvent} from 'react';
 import {useSelector, useDispatch} from 'react-redux';
-import {Field, Label, Combobox, ComboboxInput, ComboboxOptions, ComboboxOption} from '@headlessui/react';
-import {fetchData, formatCity, type CityLocation} from '../utils';
-import {fetchWeather, type WeatherCity} from '../store/weatherSlice';
-import {type AppDispatch, type RootState} from '../store/store';
-
-type CitySuggestion = CityLocation & {
-    latitude: number;
-    longitude: number;
-};
+import {Field, Label, Combobox, ComboboxInput, ComboboxButton, ComboboxOptions, ComboboxOption} from '@headlessui/react';
+import {fetchData, formatCity} from '../utils';
+import {fetchWeather, type CityData, type WeatherCity} from '../store/weatherSlice';
+import type {AppDispatch, RootState} from '../store/store';
 
 type GeocodingResponse = {
-    results?: CitySuggestion[];
+    results?: CityData[];
 };
 
 type SearchProps = {
@@ -21,8 +16,8 @@ type SearchProps = {
 export default function Search({cities}: SearchProps) {
     const [query, setQuery] = useState('');
     const [searchError, setSearchError] = useState(false);
-    const [suggestions, setSuggestions] = useState<CitySuggestion[]>([]);
-    const [selectedCity, setSelectedCity] = useState<CitySuggestion | null>(null);
+    const [suggestions, setSuggestions] = useState<CityData[]>([]);
+    const [selectedCity, setSelectedCity] = useState<CityData | null>(null);
     const {isLoading} = useSelector((state: RootState) => state.weather);
     const dispatch = useDispatch<AppDispatch>();
     const abortControllerRef = useRef<AbortController>(null);
@@ -38,12 +33,13 @@ export default function Search({cities}: SearchProps) {
                 `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(value.trim())}`,
                 signal,
             );
+            if (signal.aborted || abortControllerRef.current !== controller) return;
             const filteredSuggestions = (cityData.results ?? [])
                 .filter(suggestion => !cities.some(city => city.latitude === suggestion.latitude && city.longitude === suggestion.longitude))
                 .slice(0, 5);
             setSuggestions(filteredSuggestions);
         } catch (error) {
-            if (controller.signal.aborted) return;
+            if (controller.signal.aborted || abortControllerRef.current !== controller) return;
             console.error(error);
             setSearchError(true);
             setSuggestions([]);
@@ -55,12 +51,8 @@ export default function Search({cities}: SearchProps) {
         setQuery(value);
         setSearchError(false);
         setSelectedCity(null);
-        if (debounceRef.current) {
-            clearTimeout(debounceRef.current);
-            debounceRef.current = null;
-        }
+        if (debounceRef.current) clearTimeout(debounceRef.current);
         abortControllerRef.current?.abort();
-        abortControllerRef.current = null;
         if (value.trim().length < 2) return setSuggestions([]);
         debounceRef.current = setTimeout(() => fetchCitySuggestions(value), 300);
     }
@@ -69,7 +61,7 @@ export default function Search({cities}: SearchProps) {
         event.preventDefault();
         if (!selectedCity) return;
         try {
-            await dispatch(fetchWeather(selectedCity)).unwrap();
+            await dispatch(fetchWeather({...selectedCity, source: 'search'})).unwrap();
             setQuery('');
             setSelectedCity(null);
             setSuggestions([]);
@@ -94,24 +86,34 @@ export default function Search({cities}: SearchProps) {
                 autoComplete="off"
             >
                 <Field>
-                    <Label className="block font-medium text-gray-500 dark:text-gray-400">Search City</Label>
+                    <Label className="block font-medium text-gray-500 dark:text-gray-400 mbe-1">Search City</Label>
                     <Combobox
                         value={selectedCity}
-                        onChange={city => setSelectedCity(city)}
+                        onChange={setSelectedCity}
                     >
-                        <ComboboxInput
-                            type="search"
-                            placeholder="Toronto, Ontario, Canada"
-                            aria-describedby="search-help"
-                            maxLength={100}
-                            ref={inputRef}
-                            onChange={handleChange}
-                            displayValue={(city: CitySuggestion | null) => (city ? formatCity(city) : query)}
-                            onKeyDown={event => {
-                                if (event.key === 'Escape') setQuery('');
-                            }}
-                            className="w-full rounded-md shadow-sm border border-gray-300 dark:border-gray-700 dark:bg-gray-800 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-200 placeholder:text-gray-400 dark:placeholder:text-gray-500 px-4 py-2 mbs-1 mbe-2.5"
-                        />
+                        <div className="relative">
+                            <ComboboxInput
+                                type="search"
+                                placeholder="Toronto, Ontario, Canada"
+                                aria-describedby="search-help"
+                                maxLength={100}
+                                ref={inputRef}
+                                onChange={handleChange}
+                                displayValue={(city: CityData | null) => (city ? formatCity(city) : query)}
+                                onKeyDown={event => {
+                                    if (event.key === 'Escape') setQuery('');
+                                }}
+                                className="w-full rounded-md shadow-sm border border-gray-300 dark:border-gray-700 dark:bg-gray-800 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-200 placeholder:text-gray-400 dark:placeholder:text-gray-500 ps-4 pe-12 py-2"
+                            />
+                            {suggestions.length > 0 && (
+                                <ComboboxButton
+                                    aria-label="toggle city suggestions dropdown"
+                                    className="absolute inset-y-0 inset-e-0 text-xs cursor-pointer px-4 before:absolute before:h-6 before:inset-s-0 before:inset-bs-1/2 before:-translate-y-1/2 before:border-s"
+                                >
+                                    <span aria-hidden="true">&#x25BC;</span>
+                                </ComboboxButton>
+                            )}
+                        </div>
                         <ComboboxOptions
                             anchor="bottom"
                             className="w-(--input-width) [--anchor-gap:8px] rounded-md border border-gray-300 dark:border-gray-700 bg-[Canvas] dark:bg-gray-800 shadow-lg empty:invisible px-2 py-1"
@@ -130,7 +132,7 @@ export default function Search({cities}: SearchProps) {
                 </Field>
                 <button
                     disabled={isLoading || !selectedCity}
-                    className="w-full font-medium rounded-md bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-amber-50 disabled:text-gray-500 dark:disabled:text-gray-400 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[Canvas] focus-visible:ring-blue-500 cursor-pointer disabled:cursor-not-allowed transition-colors duration-300 px-4 py-2"
+                    className="w-full font-medium rounded-md bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-amber-50 disabled:text-gray-500 dark:disabled:text-gray-400 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[Canvas] focus-visible:ring-blue-500 cursor-pointer disabled:cursor-not-allowed transition-colors duration-300 px-4 py-2 mbs-2.5"
                 >
                     {isLoading ? 'Searching...' : 'Search'}
                 </button>
@@ -139,7 +141,7 @@ export default function Search({cities}: SearchProps) {
                 id="search-help"
                 className="font-medium text-sm text-center text-gray-500 mbs-2"
             >
-                Select a city from the suggestions to search.
+                Type a city name to see suggestions.
             </p>
             {searchError && (
                 <p
