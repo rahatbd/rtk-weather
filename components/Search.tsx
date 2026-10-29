@@ -26,8 +26,8 @@ export default function Search({cities}: SearchProps) {
 
     async function fetchCitySuggestions(value: string) {
         const controller = new AbortController();
-        abortControllerRef.current = controller;
         const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(5_000)]);
+        abortControllerRef.current = controller;
         try {
             const cityData = await fetchData<GeocodingResponse>(
                 `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(value.trim())}`,
@@ -132,7 +132,7 @@ export default function Search({cities}: SearchProps) {
                 </Field>
                 <button
                     disabled={isLoading || !selectedCity}
-                    className="w-full font-medium rounded-md bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-amber-50 disabled:text-gray-500 dark:disabled:text-gray-400 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[Canvas] focus-visible:ring-blue-500 cursor-pointer disabled:cursor-not-allowed transition-colors duration-300 px-4 py-2 mbs-2.5"
+                    className="w-full font-medium rounded-md bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-amber-50 disabled:text-gray-500 dark:disabled:text-gray-400 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[Canvas] focus-visible:ring-blue-500 cursor-pointer disabled:cursor-not-allowed select-none transition-colors duration-300 px-4 py-2 mbs-2.5"
                 >
                     {isLoading ? 'Searching...' : 'Search'}
                 </button>

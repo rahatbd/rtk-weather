@@ -28,7 +28,7 @@ export default function Forecast({city}: ForecastProps) {
                 <button
                     aria-label={`remove ${formatCity(city)} forecast`}
                     onClick={() => dispatch(removeCity({latitude: city.latitude, longitude: city.longitude}))}
-                    className="rounded-md font-medium text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-950 hover:bg-red-200 dark:hover:bg-red-900 focus-visible:outline-hidden focus-visible:ring-2 transition-colors duration-300 cursor-pointer px-3 py-2"
+                    className="rounded-md font-medium text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-950 hover:bg-red-200 dark:hover:bg-red-900 focus-visible:outline-hidden focus-visible:ring-2 transition-colors duration-300 cursor-pointer select-none px-3 py-2"
                 >
                     <span aria-hidden="true">&#x2716;&nbsp;</span>Remove
                 </button>
